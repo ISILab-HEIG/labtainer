@@ -1,5 +1,5 @@
-telnet.pdf: telnet.docx
-	soffice --convert-to pdf telnet.docx --headless
+web_lab.pdf: web_lab.docx
+	soffice --convert-to pdf web_lab.docx --headless
 
 clean:
 	rm -fr auto
