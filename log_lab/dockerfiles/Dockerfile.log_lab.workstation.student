@@ -1,0 +1,109 @@
+#
+# Labtainer Dockerfile
+#
+#  This is the default Labtainer Dockerfile template, plesae choose the appropriate
+#  base image below.
+#
+# The labtainer.base image includes the following packages:
+#    build-essential  expect  file  gcc-multilib  gdb  iputils-ping  less  man  manpages-dev 
+#    net-tools  openssh-client  python  sudo  tcl8.6  vim  zip  hexedit  rsyslog
+#
+# The labtainer.network image adds the following packages:
+#   openssl openssh-server openvpn wget tcpdump  update-inetd  xinetd
+#
+ARG registry
+FROM $registry/labtainer.network.ssh2
+#FROM $registry/labtainer.network
+#FROM $registry/labtainer.centos
+#FROM $registry/labtainer.lamp
+#
+#  lab is the fully qualified image name, e.g., mylab.some_container.student
+#  labdir is the name of the lab, e.g., mylab 
+#  imagedir is the name of the container
+#  user_name is the USER from the start.config, if other than ubuntu,
+#            then that user must be added in this dockerfile
+#            before the USER command
+#
+ARG lab
+ARG labdir
+ARG imagedir
+ARG user_name
+ARG password
+ARG apt_source
+ARG version
+LABEL version=$version
+ENV APT_SOURCE $apt_source
+RUN /usr/bin/apt-source.sh
+#
+#  put package installation here, e.g.,
+
+# Install python3 & pwntools & xauth
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends xauth python3 python3-pip python3-dev git libssl-dev libffi-dev build-essential gdbserver libc6-dbg && \
+    python3 -m pip install --upgrade pip && \
+    python3 -m pip install --upgrade pwntools
+
+# Install ltrace 
+RUN apt-get install -y --no-install-recommends git build-essential autoconf automake libtool libelf-dev\
+    && git clone https://gitlab.com/cespedes/ltrace.git \
+    && cd ltrace \
+    && ./autogen.sh \
+    && ./configure \
+    && make \
+    && make install
+
+# Install ghidra
+RUN apt-get install -y --no-install-recommends \
+    openjdk-11-jdk \
+    unzip \
+    wget \
+    && rm -rf /var/lib/apt/lists/*
+
+
+# Download Ghidra
+RUN wget https://github.com/NationalSecurityAgency/ghidra/releases/download/Ghidra_10.1_build/ghidra_10.1_PUBLIC_20211210.zip && \
+    unzip ghidra_10.1_PUBLIC_20211210.zip && \
+    rm ghidra_10.1_PUBLIC_20211210.zip
+
+# Set Ghidra environment variables
+ENV GHIDRA_HOME="/ghidra_10.1_PUBLIC"
+ENV PATH="${GHIDRA_HOME}/ghidra_10.1_PUBLIC:${PATH}"
+
+
+#
+# Install the system files found in the _system directory
+#
+ADD $labdir/$imagedir/sys_tar/sys.tar /
+ADD $labdir/sys_$lab.tar.gz /
+#
+RUN useradd -ms /bin/bash $user_name
+RUN echo "$user_name:$password" | chpasswd
+RUN adduser $user_name sudo
+# replace above with below for centos/fedora
+#RUN usermod $user_name -a -G wheel
+
+RUN cp /etc/ssh/sshd_config /etc/ssh/sshd_config_bak
+
+RUN sed -i "s/^.*X11Forwarding.*$/X11Forwarding yes/" /etc/ssh/sshd_config
+
+RUN sed -i "s/^.*X11UseLocalhost.*$/X11UseLocalhost no/" /etc/ssh/sshd_config
+
+#
+#  **** Perform all root operations, e.g.,           ****
+#  **** "apt-get install" prior to the USER command. ****
+#
+USER $user_name
+ENV HOME /home/$user_name
+#
+# Install files in the user home directory
+#
+ADD $labdir/$imagedir/home_tar/home.tar $HOME
+# remove after docker fixes problem with empty tars
+RUN rm -f $HOME/home.tar
+ADD $labdir/$lab.tar.gz $HOME
+
+#  The first thing that executes on the container.
+#
+USER root
+CMD ["/bin/bash", "-c", "exec /sbin/init --log-target=journal 3>&1"]
+
