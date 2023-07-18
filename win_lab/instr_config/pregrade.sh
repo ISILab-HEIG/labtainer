@@ -20,7 +20,7 @@ END
 
 
 # Path to the directory containing the files
-directory="$HOME"
+directory="$HOME/.msf4/"
 
 # Iterate over each file in the directory
 for file in "$directory"/*; do
